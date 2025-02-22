@@ -726,7 +726,7 @@ async def admin_approve_payment(callback: CallbackQuery, state: FSMContext):
     # Обновляем статус заказа в базе
     await db.update_order_status(order_id, 'Оплачено')
 
-    # Уведомляем пользователя!
+    # Уведомляем пользователя!!
     try:
         await bot.send_message(user_id, f"✅ Ваше замовлення #{order_id} було підтверджено та оброблено.")
     except Exception as e:

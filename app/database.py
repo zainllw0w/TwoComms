@@ -399,7 +399,7 @@ async def save_order_admin_message_id(order_id, message_id):
 
 async def save_discount_admin_message_id(user_id, discount_type, message_id):
     """
-    Сохранение message_id сообщения администратора для скидки.!
+    Сохранение message_id сообщения администратора для скидки.!!
     """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         if discount_type == 'ubd':

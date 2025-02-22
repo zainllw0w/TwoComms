@@ -265,7 +265,7 @@ async def update_parameters(data):
         text = "Ви ще не обрали товар."
     return text
 
-# Функция расчёта цены!
+# Функция расчёта цены!!
 def calculate_price(data):
     base_price = 1150 if data.get('product') == 't_shirt' else 1500
     discount = 0.0

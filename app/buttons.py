@@ -216,7 +216,7 @@ def product_navigation_keyboard(current_index, total_products,
                              callback_data='next_product')
     ])
 
-    # Кнопки навигации по цветам, если есть несколько цветов
+    # Кнопки навигации по цветам, если есть несколько цветов!
     if total_colors > 1:
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(text='⬅️ Колір',
