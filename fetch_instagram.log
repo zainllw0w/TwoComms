@@ -5935,3 +5935,39 @@ aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: busin
 2025-02-21 19:43:58,810 - INFO - Update id=330012727 is handled. Duration 109 ms by bot id=7503235642
 2025-02-21 19:44:01,801 - INFO - Update id=330012728 is handled. Duration 93 ms by bot id=7503235642
 2025-02-21 19:44:04,070 - INFO - Update id=330012729 is handled. Duration 214 ms by bot id=7503235642
+2025-02-21 20:01:31,393 - INFO - Update id=330012730 is handled. Duration 171 ms by bot id=7503235642
+2025-02-21 20:02:17,733 - INFO - Update id=330012731 is handled. Duration 208 ms by bot id=7503235642
+2025-02-21 20:59:40,352 - INFO - Update id=330012732 is handled. Duration 155 ms by bot id=7503235642
+2025-02-21 21:03:02,918 - INFO - Update id=330012733 is handled. Duration 248 ms by bot id=7503235642
+2025-02-21 21:04:42,907 - INFO - Update id=330012734 is handled. Duration 142 ms by bot id=7503235642
+2025-02-21 21:05:53,584 - INFO - Update id=330012735 is handled. Duration 323 ms by bot id=7503235642
+2025-02-21 21:06:33,532 - INFO - Òoggled option: made_in_ukraine for user 637574485
+2025-02-21 21:06:33,809 - INFO - Updated options keyboard for user 637574485
+2025-02-21 21:06:33,991 - INFO - Update id=330012736 is handled. Duration 460 ms by bot id=7503235642
+2025-02-21 21:06:36,252 - INFO - Òoggled option: made_in_ukraine for user 637574485
+2025-02-21 21:06:36,317 - INFO - Updated options keyboard for user 637574485
+2025-02-21 21:06:36,373 - INFO - Update id=330012737 is handled. Duration 121 ms by bot id=7503235642
+2025-02-21 21:06:37,055 - INFO - Òoggled option: back_print for user 637574485
+2025-02-21 21:06:37,119 - INFO - Updated options keyboard for user 637574485
+2025-02-21 21:06:37,187 - INFO - Update id=330012738 is handled. Duration 131 ms by bot id=7503235642
+2025-02-21 21:06:46,255 - INFO - Displayed product to user 637574485
+2025-02-21 21:06:46,320 - INFO - Update id=330012739 is handled. Duration 162 ms by bot id=7503235642
+2025-02-22 00:53:03,849 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - Request timeout error
+2025-02-22 00:53:03,851 - WARNING - Sleep for 1.000000 seconds and try again... (tryings = 0, bot id = 7503235642)
+2025-02-22 06:41:49,580 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - Request timeout error
+2025-02-22 06:41:49,581 - WARNING - Sleep for 1.208901 seconds and try again... (tryings = 1, bot id = 7503235642)
+2025-02-22 06:41:50,792 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientConnectorDNSError: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2025-02-22 06:41:50,792 - WARNING - Sleep for 1.438586 seconds and try again... (tryings = 2, bot id = 7503235642)
+2025-02-22 06:41:52,246 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientConnectorDNSError: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2025-02-22 06:41:52,246 - WARNING - Sleep for 1.762979 seconds and try again... (tryings = 3, bot id = 7503235642)
+2025-02-22 06:41:54,019 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientConnectorDNSError: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2025-02-22 06:41:54,019 - WARNING - Sleep for 2.321374 seconds and try again... (tryings = 4, bot id = 7503235642)
+2025-02-22 06:41:56,346 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientConnectorDNSError: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2025-02-22 06:41:56,346 - WARNING - Sleep for 3.075668 seconds and try again... (tryings = 5, bot id = 7503235642)
+2025-02-22 06:41:59,434 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientConnectorDNSError: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2025-02-22 06:41:59,434 - WARNING - Sleep for 4.028896 seconds and try again... (tryings = 6, bot id = 7503235642)
+2025-02-22 06:42:03,473 - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientConnectorDNSError: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2025-02-22 06:42:03,474 - WARNING - Sleep for 4.964576 seconds and try again... (tryings = 7, bot id = 7503235642)
+2025-02-22 06:42:18,643 - INFO - Connection established (tryings = 8, bot id = 7503235642)
+2025-02-22 07:58:37,337 - INFO - Polling stopped
+2025-02-22 07:58:37,604 - INFO - Polling stopped for bot @twocommsbot id=7503235642 - 'TwoComms Store Bot'

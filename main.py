@@ -1,4 +1,3 @@
-# main.py
 import asyncio
 import json
 import os
@@ -18,28 +17,20 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import StatesGroup, State
-
-from app import buttons as kb
-from app import database as db  # Импортируем ваш database.py
-from app.fetch_instagram import fetch_and_update_products
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения из .env
+from app import buttons as kb
+from app import database as db
+
+# Загрузка переменных окружения
 load_dotenv()
-
-# Идентификатор администратора
 ADMIN_ID = int(os.getenv('ADMIN_ID'))
-
-# Создаем бота и диспетчер
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
-# Путь к JSON файлу
 PRODUCTS_JSON_PATH = 'app/products.json'
 
-
-# Состояния FSM для заказа
+# Определение состояний FSM
 class OrderStates(StatesGroup):
     waiting_for_size = State()
     waiting_for_options = State()
@@ -52,16 +43,13 @@ class OrderStates(StatesGroup):
     waiting_for_payment_screenshot = State()
     waiting_for_paid_confirmation = State()
 
-
 class DiscountStates(StatesGroup):
     waiting_for_ubd_photo = State()
     waiting_for_repost_screenshot = State()
 
-
 class SupportStates(StatesGroup):
     waiting_for_issue_description = State()
     waiting_for_user_response = State()
-
 
 class AdminInputStates(StatesGroup):
     admin_support_reply = State()
@@ -71,42 +59,26 @@ class AdminInputStates(StatesGroup):
     waiting_for_receipt = State()
     waiting_for_print_description = State()
 
-
-# Устанавливаем уровень логирования
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 # Команда /start
 @dp.message(Command('start'))
 async def cmd_start(message: Message):
     if message.from_user.id == ADMIN_ID:
-        await message.answer(
-            '👋 Вітаємо, Адміністратор!',
-            reply_markup=kb.admin_main_menu()
-        )
+        await message.answer('👋 Вітаємо, Адміністратор!', reply_markup=kb.admin_main_menu())
     else:
-        await message.answer(
-            '👋 Вітаємо в нашому магазині! Оберіть опцію:',
-            reply_markup=kb.main_menu()
-        )
+        await message.answer('👋 Вітаємо в нашому магазині! Оберіть опцію:', reply_markup=kb.main_menu())
 
-
-# Обработка кнопки "🔙 На головну" во всех местах
+# Обработка кнопки "🔙 На головну"
 @dp.message(F.text == '🔙 На головну')
 async def back_to_main(message: Message, state: FSMContext):
     await state.clear()
     if message.from_user.id == ADMIN_ID:
-        await message.answer(
-            '🔙 Повертаємось до головного меню.',
-            reply_markup=kb.admin_main_menu()
-        )
+        await message.answer('🔙 Повертаємось до головного меню.', reply_markup=kb.admin_main_menu())
     else:
-        await message.answer(
-            '🔙 Повертаємось до головного меню.',
-            reply_markup=kb.main_menu()
-        )
-
+        await message.answer('🔙 Повертаємось до головного меню.', reply_markup=kb.main_menu())
 
 # Обработка раздела "Мої замовлення"
 @dp.message(F.text == '📦 Мої замовлення')
@@ -638,10 +610,9 @@ async def receive_ubd_photo(message: Message, state: FSMContext):
 # Обработка нажатия администратором на кнопки одобрения или отклонения скидок
 @dp.callback_query(F.data.startswith('approve_') & ~F.data.startswith('approve_payment_'))
 async def admin_approve_discount(callback: CallbackQuery, state: FSMContext):
-    data = callback.data
-    parts = data.split('_')
-    discount_type = parts[1]
-    user_id = int(parts[2])
+    data = callback.data.split('_')
+    discount_type = data[1]
+    user_id = int(data[2])
 
     try:
         user_chat = await bot.get_chat(user_id)
@@ -649,19 +620,29 @@ async def admin_approve_discount(callback: CallbackQuery, state: FSMContext):
     except Exception:
         user_username = f"User ID: {user_id}"
 
+    # Сохраняем скидку в БД
     await db.add_discount(user_id, discount_type)
-    new_caption = f"{callback.message.caption}\n\n✅ Знижку '{discount_type.upper()}' для користувача {user_username} схвалено."
-    await callback.message.edit_caption(new_caption)
+
+    # Отправляем уведомление администратору
     try:
-        await bot.send_message(user_id, f"✅ Вашу знижку '{discount_type.upper()}' було схвалено!")
+        await bot.send_message(ADMIN_ID,
+                               f"✅ Ви підтвердили знижку '{discount_type.upper()}' для користувача {user_username}.")
+    except Exception as e:
+        logger.error(f"Error sending message to admin: {e}")
+
+    # Отправляем уведомление пользователю
+    try:
+        await bot.send_message(user_id, f"✅ Ваша знижка '{discount_type.upper()}' була успішно активована!")
     except Exception as e:
         logger.error(f"Error sending discount approval message to user {user_id}: {e}")
+
+    # Удаляем inline-клавиатуру из сообщения
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception as e:
         logger.error(f"Error updating reply_markup: {e}")
 
-    await callback.answer()
+    await callback.answer("Схвалено")
 
 
 @dp.callback_query(F.data.startswith('reject_') & ~F.data.startswith('reject_payment_'))
@@ -732,10 +713,9 @@ async def process_discount_rejection_reason(message: Message, state: FSMContext)
 # Обработка нажатия администратором на кнопки одобрения или отклонения оплаты
 @dp.callback_query(F.data.startswith('approve_payment_'))
 async def admin_approve_payment(callback: CallbackQuery, state: FSMContext):
-    data = callback.data
-    parts = data.split('_')
-    user_id = int(parts[2])
-    order_id = int(parts[3])
+    data = callback.data.split('_')
+    user_id = int(data[2])
+    order_id = int(data[3])
 
     try:
         user_chat = await bot.get_chat(user_id)
@@ -743,31 +723,28 @@ async def admin_approve_payment(callback: CallbackQuery, state: FSMContext):
     except Exception:
         user_username = f"User ID: {user_id}"
 
+    # Обновляем статус заказа в базе
     await db.update_order_status(order_id, 'Оплачено')
+
+    # Уведомляем пользователя
     try:
         await bot.send_message(user_id, f"✅ Ваше замовлення #{order_id} було підтверджено та оброблено.")
     except Exception as e:
         logger.error(f"Error sending payment approval message to user {user_id}: {e}")
-    new_caption = f"{callback.message.caption}\n\n✅ Оплату підтверджено для замовлення #{order_id}."
-    await callback.message.edit_caption(new_caption)
+
+    # Удаляем inline-клавиатуру из сообщения
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception as e:
         logger.error(f"Error updating reply_markup: {e}")
 
-    order = await db.get_order_by_id(order_id)
-    order_text = await format_order_text(order, order_id, user_username, user_id)
-    statuses = get_statuses_from_order_status(order['status'])
-    image_url = await get_order_image_url(order)
-    admin_message = await bot.send_photo(
-        ADMIN_ID,
-        photo=image_url,
-        caption=f"📦 **Замовлення #{order_id}** від {user_username}:\n{order_text}",
-        reply_markup=kb.admin_order_actions(order_id, statuses=statuses)
-    )
-    await db.save_order_admin_message_id(order_id, admin_message.message_id)
+    # Обновляем информацию для администратора – отправляем новое сообщение с меню обработки заказа
+    try:
+        await process_order_for_admin(order_id, user_username, user_id)
+    except Exception as e:
+        logger.error(f"Error processing order for admin: {e}")
 
-    await callback.answer()
+    await callback.answer("Оплату підтверджено")
 
 
 @dp.callback_query(F.data.startswith('reject_payment_'))
@@ -1326,6 +1303,205 @@ def start_flask():
     thread.start()
 
 
+# 1. Обработка кнопки "Як відбувається доставка"
+@dp.callback_query(F.data == 'how_delivery')
+async def how_delivery_handler(callback: CallbackQuery):
+    text = (
+        "🚚 **Доставка**\n\n"
+        "Ваше замовлення буде відправлено Новою Поштою.\n"
+        "Оплатити можна як накладеним платежем безпосередньо у відділенні, "
+        "так і на карту – у цьому випадку доставка також здійснюється Новою Поштою.\n\n"
+        "Якщо оплата буде здійснена відразу на карту, доставка для Вас – безкоштовна."
+    )
+    await callback.message.answer(text, parse_mode='Markdown')
+    await callback.answer()
+
+
+# ======================================================================
+# 2. Унификация обработки заказа при оплате на карту
+
+async def process_order_for_admin(order_id, user_username, user_id):
+    order = await db.get_order_by_id(order_id)
+    order_text = await format_order_text(order, order_id, user_username, user_id)
+    statuses = get_statuses_from_order_status(order['status'])
+    image_url = await get_order_image_url(order)
+    admin_message = await bot.send_photo(
+        ADMIN_ID,
+        photo=image_url,
+        caption=f"📦 **Замовлення #{order_id}** від {user_username}:\n{order_text}",
+        reply_markup=kb.admin_order_actions(order_id, statuses=statuses)
+    )
+    await db.save_order_admin_message_id(order_id, admin_message.message_id)
+
+
+@dp.callback_query(F.data.startswith('approve_payment_'))
+async def admin_approve_payment(callback: CallbackQuery, state: FSMContext):
+    data = callback.data.split('_')
+    user_id = int(data[2])
+    order_id = int(data[3])
+    try:
+        user_chat = await bot.get_chat(user_id)
+        user_username = f"@{user_chat.username}" if user_chat.username else user_chat.full_name
+    except Exception:
+        user_username = f"User ID: {user_id}"
+
+    await db.update_order_status(order_id, 'Оплачено')
+    try:
+        await bot.send_message(user_id, f"✅ Ваше замовлення #{order_id} було підтверджено та оброблено.")
+    except Exception as e:
+        logger.error(f"Error sending payment approval message to user {user_id}: {e}")
+
+    new_caption = f"{callback.message.caption}\n\n✅ Оплату підтверджено для замовлення #{order_id}."
+    try:
+        await callback.message.edit_caption(new_caption)
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception as e:
+        logger.error(f"Error updating reply_markup: {e}")
+
+    await process_order_for_admin(order_id, user_username, user_id)
+    await callback.answer()
+
+
+# ======================================================================
+# 3. Уведомления при подтверждении скидок
+
+@dp.callback_query(F.data.startswith('approve_') & ~F.data.startswith('approve_payment_'))
+async def admin_approve_discount(callback: CallbackQuery, state: FSMContext):
+    data = callback.data.split('_')
+    discount_type = data[1]
+    user_id = int(data[2])
+    try:
+        user_chat = await bot.get_chat(user_id)
+        user_username = f"@{user_chat.username}" if user_chat.username else user_chat.full_name
+    except Exception:
+        user_username = f"User ID: {user_id}"
+
+    await db.add_discount(user_id, discount_type)
+
+    # Отправляем уведомления и администратору, и пользователю
+    await bot.send_message(ADMIN_ID,
+                           f"✅ Ви підтвердили знижку '{discount_type.upper()}' для користувача {user_username}.")
+    try:
+        await bot.send_message(user_id, f"✅ Ваша знижка '{discount_type.upper()}' була успішно активована!")
+    except Exception as e:
+        logger.error(f"Error sending discount approval message to user {user_id}: {e}")
+
+    new_caption = f"{callback.message.caption}\n\n✅ Знижку '{discount_type.upper()}' для користувача {user_username} схвалено."
+    try:
+        await callback.message.edit_caption(new_caption)
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception as e:
+        logger.error(f"Error updating reply_markup: {e}")
+
+    await callback.answer()
+
+
+# ======================================================================
+# Вспомогательные функции (расчет цены, форматирование заказа, получение статусов и URL изображения)
+
+async def calculate_price(product, user_id):
+    base_price = 1150 if product.get('model_id', '').startswith('ts') else 1350
+    total_discount = 0.0
+    discounts = await db.get_user_discounts(user_id)
+    discount_details = []
+    if discounts.get('ubd'):
+        total_discount += 0.10
+        discount_details.append('🎖️ 10% за УБД')
+    if discounts.get('repost'):
+        total_discount += 0.10
+        discount_details.append('🔄 10% за репост')
+    final_price = int(base_price * (1 - total_discount))
+    discount_text = (f"🎁 **Ваша знижка:** {' + '.join(discount_details)}"
+                     if discount_details else "🎁 **Знижки не застосовано**")
+    return final_price, discount_text
+
+
+async def format_order_text(order, order_id, username, user_id):
+    product_code = order.get('product')
+    product = 'Футболка' if product_code.startswith('ts') else 'Худі'
+    size = order.get('size', 'Не обрано')
+    discounts = await db.get_user_discounts(user_id)
+    discounts_text = []
+    if discounts.get('ubd'):
+        discounts_text.append('🎖️ УБД - 10%')
+    if discounts.get('repost'):
+        discounts_text.append('🔄 Репост - 10%')
+    discounts_str = ', '.join(discounts_text) if discounts_text else '❌ Немає'
+    price = order.get('price', 'Не вказано')
+    options_text = ""
+    if product == 'Футболка':
+        if order.get('made_in_ukraine'):
+            options_text += "✅ Made in Ukraine принт\n"
+        if order.get('back_text'):
+            options_text += "✅ Задня підпис\n"
+        if order.get('back_print'):
+            options_text += "✅ Задній принт\n"
+    elif product == 'Худі':
+        if order.get('collar'):
+            options_text += "✅ Горловина\n"
+        if order.get('sleeve_text'):
+            options_text += "✅ Надписи на рукавах\n"
+        if order.get('back_print'):
+            options_text += "✅ Задній принт\n"
+    options_text = "\n**Вибрані опції:**\n" + options_text if options_text else "\n**Вибрані опції:**\n❌ Немає"
+    rejection_reason_text = f"\n❌ **Причина відхилення:** {order.get('rejection_reason')}" if order.get(
+        'rejection_reason') else ""
+    ttn_text = f"\n📦 **ТТН:** {order.get('ttn')}" if order.get('ttn') else ""
+    text = (
+        f"📝 **Замовлення #{order_id}**\n"
+        f"🛍️ **Товар:** {product}\n"
+        f"📏 **Розмір:** {size}\n"
+        f"🏙️ **Місто:** {order.get('city')}\n"
+        f"🏢 **Відділення:** {order.get('branch')}\n"
+        f"🧑 **ПІБ:** {order.get('name')}\n"
+        f"📞 **Телефон:** {order.get('phone')}\n"
+        f"💳 **Спосіб оплати:** {'💳 Оплата на карту' if order.get('payment_method') == 'card' else '💰 Плата на пошті'}\n"
+        f"🎖️ **Знижки:** {discounts_str}\n"
+        f"💸 **Сума до оплати:** {price} грн"
+        f"{options_text}"
+        f"{rejection_reason_text}"
+        f"{ttn_text}"
+    )
+    return text
+
+
+def get_statuses_from_order_status(order_status):
+    statuses = {'ready': False, 'sent': False, 'delivered': False}
+    if order_status in ['Нове', 'Оплата підтверджена', 'Очікується підтвердження оплати', 'Оплачено']:
+        statuses['ready'] = False
+    elif order_status == 'Готово до відправки':
+        statuses['ready'] = True
+    elif order_status == 'Відправлено':
+        statuses['ready'] = True
+        statuses['sent'] = True
+    elif order_status == 'Доставлено':
+        statuses['ready'] = True
+        statuses['sent'] = True
+        statuses['delivered'] = True
+    return statuses
+
+
+async def get_order_image_url(order):
+    if not os.path.exists(PRODUCTS_JSON_PATH):
+        return "https://i.ibb.co/cx351Lx/1-2.png"
+    with open(PRODUCTS_JSON_PATH, 'r', encoding='utf-8') as f:
+        products = json.load(f)
+    category = 't_shirts' if order['product'].startswith('ts') else 'hoodies'
+    category_products = products.get(category, [])
+    product_data = next((p for p in category_products if p['model_id'] == order['product']), None)
+    if product_data:
+        colors = product_data.get('colors', [])
+        index = order.get('selected_color_index', 0)
+        if colors and 0 <= index < len(colors):
+            return colors[index]
+    return "https://i.ibb.co/cx351Lx/1-2.png"
+
+
+# ======================================================================
+# Запуск бота
+async def main():
+    await db.init_db()  # Создаём таблицы, если их нет
+    await dp.start_polling(bot, skip_updates=True)
+
 if __name__ == '__main__':
-    start_flask()
     asyncio.run(main())

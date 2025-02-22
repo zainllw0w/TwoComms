@@ -1,12 +1,9 @@
-# buttons.py
-
 from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
     InlineKeyboardMarkup,
     InlineKeyboardButton
 )
-
 
 def main_menu():
     keyboard = ReplyKeyboardMarkup(
@@ -21,7 +18,6 @@ def main_menu():
         resize_keyboard=True
     )
     return keyboard
-
 
 def admin_main_menu():
     keyboard = ReplyKeyboardMarkup(
@@ -38,18 +34,25 @@ def admin_main_menu():
     )
     return keyboard
 
+def support_response_options():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text='✅ Питання вирішено', callback_data='support_resolved'),
+            InlineKeyboardButton(text='🔄 Задати ще питання', callback_data='support_more_question')
+        ]
+    ])
+    return keyboard
 
 def category_selection_menu():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text='👕 Футболки'),
-             KeyboardButton(text='🥷🏼 Худі')],
+             KeyboardButton(text='🥷🏼 Худі (наразі не має в наявності)')],
             [KeyboardButton(text='🔙 На головну')]
         ],
         resize_keyboard=True
     )
     return keyboard
-
 
 def size_selection_menu():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -63,46 +66,27 @@ def size_selection_menu():
             InlineKeyboardButton(text='XXL', callback_data='size_XXL')
         ],
         [
-            InlineKeyboardButton(text='📏 Розмірна сітка',
-                                 callback_data='size_chart')
+            InlineKeyboardButton(text='📏 Розмірна сітка', callback_data='size_chart')
         ]
     ])
     return keyboard
 
-
 def back_to_main_menu():
     keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text='🔙 На головну')]
-        ],
+        keyboard=[[KeyboardButton(text='🔙 На головну')]],
         resize_keyboard=True
     )
     return keyboard
-
 
 def no_orders_menu():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(
-                text='🛠️ Оформити замовлення в конструкторі')],
+            [KeyboardButton(text='🛠️ Оформити замовлення в конструкторі')],
             [KeyboardButton(text='🔙 На головну')]
         ],
         resize_keyboard=True
     )
     return keyboard
-
-
-def support_response_options():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text='✅ Питання вирішено',
-                                 callback_data='support_resolved'),
-            InlineKeyboardButton(text='🔄 Задати ще питання',
-                                 callback_data='support_more_question')
-        ]
-    ])
-    return keyboard
-
 
 def info_support_buttons():
     keyboard = ReplyKeyboardMarkup(
@@ -115,69 +99,54 @@ def info_support_buttons():
     )
     return keyboard
 
-
 def payment_options():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text='💰 Плата на пошті',
-                                 callback_data='payment_post'),
-            InlineKeyboardButton(text='💳 Оплата на карту',
-                                 callback_data='payment_card')
+            InlineKeyboardButton(text='💰 Плата на пошті', callback_data='payment_post'),
+            InlineKeyboardButton(text='💳 Оплата на карту', callback_data='payment_card')
         ],
         [
-            InlineKeyboardButton(text='❓ Як відбувається доставка?',
-                                 callback_data='how_delivery')
+            InlineKeyboardButton(text='❓ Як відбувається доставка?', callback_data='how_delivery')
         ]
     ])
     return keyboard
 
-
 def paid_button():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text='✅ Оплачено',
-                              callback_data='paid_confirmed')]
+        [InlineKeyboardButton(text='✅ Оплачено', callback_data='paid_confirmed')]
     ])
     return keyboard
-
 
 def approval_buttons(discount_type, user_id):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text='✅ Схвалити',
-                                 callback_data=f'approve_{discount_type}_{user_id}'),
-            InlineKeyboardButton(text='❌ Відхилити',
-                                 callback_data=f'reject_{discount_type}_{user_id}')
+            InlineKeyboardButton(text='✅ Схвалити', callback_data=f'approve_{discount_type}_{user_id}'),
+            InlineKeyboardButton(text='❌ Відхилити', callback_data=f'reject_{discount_type}_{user_id}')
         ]
     ])
     return keyboard
-
 
 def payment_approval_buttons(user_id, order_id):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text='✅ Підтвердити оплату',
-                                 callback_data=f'approve_payment_{user_id}_{order_id}'),
-            InlineKeyboardButton(text='❌ Відхилити оплату',
-                                 callback_data=f'reject_payment_{user_id}_{order_id}')
+            InlineKeyboardButton(text='✅ Підтвердити оплату', callback_data=f'approve_payment_{user_id}_{order_id}'),
+            InlineKeyboardButton(text='❌ Відхилити оплату', callback_data=f'reject_payment_{user_id}_{order_id}')
         ]
     ])
     return keyboard
 
-
 def admin_order_actions(order_id, statuses):
-    """
-    statuses is a dict like {'ready': True, 'sent': False, 'delivered': False}
-    """
     buttons = []
-    # Ready for dispatch
-    if statuses.get('ready', False):
-        ready_text = '🛠️ Готово до відправки ✅'
-    else:
-        ready_text = '🛠️ Готово до відправки'
-    buttons.append([
-        InlineKeyboardButton(text=ready_text,
-                             callback_data=f'order_ready_{order_id}')
-    ])
+    ready_text = '🛠️ Готово до відправки ✅' if statuses.get('ready', False) else '🛠️ Готово до відправки'
+    buttons.append([InlineKeyboardButton(text=ready_text, callback_data=f'order_ready_{order_id}')])
+    sent_text = '📦 Відправлено ✅' if statuses.get('sent', False) else '📦 Відправлено'
+    buttons.append([InlineKeyboardButton(text=sent_text, callback_data=f'order_sent_{order_id}')])
+    delivered_text = '✅ Доставлено ✅' if statuses.get('delivered', False) else '✅ Доставлено'
+    buttons.append([InlineKeyboardButton(text=delivered_text, callback_data=f'order_delivered_{order_id}')])
+    buttons.append([InlineKeyboardButton(text='❌ Відхилити замовлення', callback_data=f'order_cancel_{order_id}')])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+    return keyboard
+
     # Sent
     if statuses.get('sent', False):
         sent_text = '📦 Відправлено ✅'
