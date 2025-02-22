@@ -227,7 +227,7 @@ def product_navigation_keyboard(current_index, total_products,
                                  callback_data='next_color')
         ])
 
-    # Кнопка выбора
+    # Кнопка выбора!
     keyboard.inline_keyboard.append([
         InlineKeyboardButton(text='✅ Вибрати',
                              callback_data='select_product')
