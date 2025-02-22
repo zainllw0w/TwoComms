@@ -4,6 +4,7 @@ from aiogram.filters import CommandStart, Text
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message, CallbackQuery, ContentType
+from main import display_product
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 import os
 
@@ -60,21 +61,14 @@ async def select_hoodie(message: Message, state: FSMContext):
     await state.update_data(product='hoodie', size=None, back_print=False, collar=False)
     await message.answer('Оберіть розмір худі:', reply_markup=kb.hoodieBtn)
 
-# Обработка выбора размера
 @dp.callback_query(Text(startswith='size_'))
 async def choose_size(callback: CallbackQuery, state: FSMContext):
     size = callback.data.split('_')[1]
     await state.update_data(size=size)
-
-    data = await state.get_data()
-    text = await update_parameters(data)
-
-    # Отображаем опции в зависимости от выбранного товара
-    if data.get('product') == 't_shirt':
-        await callback.message.edit_text(text=text, reply_markup=kb.generate_tshirt_option_buttons(data))
-    elif data.get('product') == 'hoodie':
-        await callback.message.edit_text(text=text, reply_markup=kb.generate_hoodie_option_buttons(data))
+    # Сразу отображаем окно продукта с выбранными опциями
+    await display_product(callback.from_user.id, state)
     await callback.answer()
+
 
 # Обработка переключения опций
 @dp.callback_query(Text(startswith='toggle_'))
@@ -251,7 +245,7 @@ async def update_parameters(data):
             f"Ваш вибір:\n"
             f"Розмір футболки: {data.get('size', 'не обрано')}\n"
             f"Задній принт: {'включено' if data.get('back_print') else 'вимкнено'}\n"
-            f"Задня надпис: {'включено' if data.get('back_text') else 'вимкнено'}\n"
+            f"Задній надпис: {'включено' if data.get('back_text') else 'вимкнено'}\n"
             f"Made in Ukraine: {'включено' if data.get('made_in_ukraine') else 'вимкнено'}"
         )
     elif data.get('product') == 'hoodie':

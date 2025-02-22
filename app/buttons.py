@@ -202,35 +202,69 @@ def admin_support_reply_button(issue_id):
     return keyboard
 
 
-def product_navigation_keyboard(current_index, total_products,
-                                current_color_index, total_colors):
+def product_display_keyboard(
+        current_index,
+        total_products,
+        current_color_index,
+        total_colors,
+        category,
+        selected_options
+):
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
 
-    # Кнопки навигации по моделям
+    # ----- 1) Ряд навигации по моделям
     keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text='⬅️ Назад',
-                             callback_data='prev_product'),
-        InlineKeyboardButton(text=f"Модель {current_index + 1} з {total_products}",
-                             callback_data='noop'),
-        InlineKeyboardButton(text='Вперед ➡️',
-                             callback_data='next_product')
+        InlineKeyboardButton(text='⬅️ Назад', callback_data='prev_product'),
+        InlineKeyboardButton(
+            text=f"Модель {current_index + 1} з {total_products}",
+            callback_data='noop'
+        ),
+        InlineKeyboardButton(text='Вперед ➡️', callback_data='next_product')
     ])
 
-    # Кнопки навигации по цветам, если есть несколько цветов!
+    # ----- 2) Ряд навигации по цветам (если их больше 1)
     if total_colors > 1:
         keyboard.inline_keyboard.append([
-            InlineKeyboardButton(text='⬅️ Колір',
-                                 callback_data='prev_color'),
-            InlineKeyboardButton(text=f"Колір {current_color_index + 1} з {total_colors}",
-                                 callback_data='noop'),
-            InlineKeyboardButton(text='Колір ➡️',
-                                 callback_data='next_color')
+            InlineKeyboardButton(text='⬅️ Колір', callback_data='prev_color'),
+            InlineKeyboardButton(
+                text=f"Колір {current_color_index + 1} з {total_colors}",
+                callback_data='noop'
+            ),
+            InlineKeyboardButton(text='Колір ➡️', callback_data='next_color')
         ])
 
-    # Кнопка выбора!
+    # ----- 3) Ряды выбора опций
+    if category == 't_shirts':
+        options = [
+            ('made_in_ukraine', 'Принт біля шиї "Made in Ukraine"'),
+            ('back_text', 'Задній текст з лого"'),
+            ('back_print', 'Великий принт на спину')
+        ]
+    elif category == 'hoodies':
+        options = [
+            ('collar', 'Горловина'),
+            ('sleeve_text', 'Надписи на рукавах'),
+            ('back_print', 'Задній принт')
+        ]
+    else:
+        options = []
+
+    for option_key, option_text in options:
+        # Если опция включена -> ✅, иначе -> ❌
+        if selected_options.get(option_key, False):
+            btn_text = f"{option_text}- ✅"
+        else:
+            btn_text = f"{option_text}- ❌"
+        callback_data = f"option_{option_key}"
+        keyboard.inline_keyboard.append([
+            InlineKeyboardButton(text=btn_text, callback_data=callback_data)
+        ])
+
+    # ----- 4) Кнопка "Вибрати"
     keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text='✅ Вибрати',
-                             callback_data='select_product')
+        InlineKeyboardButton(text='✔️Вибрати✔️', callback_data='select_product')
     ])
 
     return keyboard
@@ -259,9 +293,9 @@ def options_selection_keyboard(category, selected_options):
 
     if category == 't_shirts':
         options = [
-            ('made_in_ukraine', 'made in Ukraine принт'),
-            ('back_text', 'Задня підпис'),
-            ('back_print', 'Задній принт')
+            ('made_in_ukraine', 'Принт біля шиї "Made in Ukraine" (на вибір)'),
+            ('back_text', 'Задній текст: "Світ ловив мене та неспіймав" (на вибір)"'),
+            ('back_print', 'Великий принт на спину (на вибір)')
         ]
     elif category == 'hoodies':
         options = [

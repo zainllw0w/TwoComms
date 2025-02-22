@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 
 from app import buttons as kb
 from app import database as db
+import time
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -122,7 +123,24 @@ async def constructor_order(message: Message):
 @dp.message(F.text.in_(['👕 Футболки', '🥷🏼 Худі']))
 async def select_category(message: Message, state: FSMContext):
     category = 't_shirts' if message.text == '👕 Футболки' else 'hoodies'
-    await state.update_data(category=category)
+
+    # Устанавливаем изначально включённые опции
+    if category == 't_shirts':
+        default_options = {
+            'made_in_ukraine': True,
+            'back_text': True,
+            'back_print': True
+        }
+    else:  # hoodies
+        default_options = {
+            'collar': True,
+            'sleeve_text': True,
+            'back_print': True
+        }
+
+    # Сохраняем в state
+    await state.update_data(category=category, options=default_options)
+
     await message.answer(
         '📏 Оберіть розмір:',
         reply_markup=kb.size_selection_menu()
@@ -144,16 +162,12 @@ async def select_size(callback: CallbackQuery, state: FSMContext):
     size = callback.data.split('_')[1]
     if size not in valid_sizes:
         return
+    # Сохраняем выбранный размер
     await state.update_data(size=size)
-    await state.set_state(OrderStates.waiting_for_options)
-    data = await state.get_data()
-    category = data.get('category')
-    selected_options = data.get('options', {})
-    options_keyboard = kb.options_selection_keyboard(category, selected_options)
-    await callback.message.answer(
-        '📋 Оберіть додаткові опції:',
-        reply_markup=options_keyboard
-    )
+    # Сразу показываем дисплей продукта
+    await display_product(callback.from_user.id, state)
+    # Можно очистить состояние или оставить
+    # await state.clear()   # если нужно
     await callback.answer()
 
 
@@ -164,22 +178,22 @@ async def back_to_main_from_size(message: Message, state: FSMContext):
 
 
 # Обработка нажатий на опции
-@dp.callback_query(OrderStates.waiting_for_options, F.data.startswith('option_'))
+@dp.callback_query(F.data.startswith('option_'))
 async def toggle_option(callback: CallbackQuery, state: FSMContext):
-    option_key = callback.data[len('option_'):]
-    logger.info(f"Тoggled option: {option_key} for user {callback.from_user.id}")
+    # Получаем ключ опции, например "made_in_ukraine"
+    option_key = callback.data.split('_', maxsplit=1)[1]
+    # Забираем текущие данные из FSM
     data = await state.get_data()
+    # Словарь с выбранными опциями
     selected_options = data.get('options', {})
-    current_state = selected_options.get(option_key, False)
-    selected_options[option_key] = not current_state
+    # Переключаем значение (True -> False / False -> True)
+    current_value = selected_options.get(option_key, False)
+    selected_options[option_key] = not current_value
+    # Сохраняем обратно в FSM
     await state.update_data(options=selected_options)
-    category = data.get('category')
-    options_keyboard = kb.options_selection_keyboard(category, selected_options)
-    try:
-        await callback.message.edit_reply_markup(reply_markup=options_keyboard)
-        logger.info(f"Updated options keyboard for user {callback.from_user.id}")
-    except Exception as e:
-        logger.error(f"Error updating keyboard: {e}")
+    # Вызываем display_product, чтобы обновить сообщение (с новыми галочками, ценой и т.п.)
+    await display_product(callback.from_user.id, state)
+    # Закрываем «круг» коллбэка
     await callback.answer()
 
 
@@ -225,33 +239,37 @@ async def display_product(user_id, state: FSMContext):
         await state.update_data(current_color_index=current_color_index)
 
     selected_color_url = colors[current_color_index]
+    # Для футболок добавляем cache buster
+    image_url = selected_color_url
+
 
     await state.update_data(selected_product=product, selected_color_index=current_color_index)
 
     price, discount_text = await calculate_price(product, user_id)
     await state.update_data(price=price)
 
-    options_text = ""
     selected_options = data.get('options', {})
+
+    # Формируем описание выбранных опций
+    options_text = ""
     if category == 't_shirts':
         if selected_options.get('made_in_ukraine'):
-            options_text += "✅ Made in Ukraine принт\n"
+            options_text += "✅ Принт біля шиї\n"
+        else:
+            options_text += "❌ Принт біля шиї\n"
         if selected_options.get('back_text'):
-            options_text += "✅ Задня підпис\n"
+            options_text += "✅ Задній підпис\n"
+        else:
+            options_text += "❌ Задній підпис\n"
         if selected_options.get('back_print'):
-            options_text += "✅ Задній принт\n"
+            options_text += "✅ Великий принт на спину\n"
+        else:
+            options_text += "❌ Великий принт на спину\n"
     elif category == 'hoodies':
-        if selected_options.get('collar'):
-            options_text += "✅ Горловина\n"
-        if selected_options.get('sleeve_text'):
-            options_text += "✅ Надписи на рукавах\n"
-        if selected_options.get('back_print'):
-            options_text += "✅ Задній принт\n"
+        # Добавьте опции для худі, если нужно
+        pass
 
-    if options_text:
-        options_text = "\n**Вибрані опції:**\n" + options_text
-    else:
-        options_text = "\n**Вибрані опції:**\n❌ Немає"
+    options_text = "\n**Вибрані опції:**\n" + options_text
 
     order_summary = (
         f"📝 **Ваше замовлення:**\n"
@@ -263,30 +281,31 @@ async def display_product(user_id, state: FSMContext):
         f"{options_text}"
     )
 
-    product_message_id = data.get('product_message_id')
-    keyboard = kb.product_navigation_keyboard(current_index, total_products, current_color_index, total_colors)
+    # Генерируем клавиатуру, передавая выбранные опции
+    keyboard = kb.product_display_keyboard(current_index, total_products, current_color_index, total_colors, category,
+                                           selected_options)
 
+    product_message_id = data.get('product_message_id')
     if product_message_id:
         try:
-            # Редактируем уже отправленное сообщение
             await bot.edit_message_media(
                 chat_id=user_id,
                 message_id=product_message_id,
-                media=InputMediaPhoto(media=selected_color_url, caption=order_summary, parse_mode='Markdown'),
+                media=InputMediaPhoto(media=image_url, caption=order_summary, parse_mode='Markdown'),
                 reply_markup=keyboard
             )
         except Exception as e:
             logger.error(f"Error editing product photo: {e}")
     else:
         try:
-            message_obj = await bot.send_photo(
+            msg = await bot.send_photo(
                 user_id,
-                photo=selected_color_url,
+                photo=image_url,
                 caption=order_summary,
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
-            await state.update_data(product_message_id=message_obj.message_id)
+            await state.update_data(product_message_id=msg.message_id)
             logger.info(f"Displayed product to user {user_id}")
         except Exception as e:
             logger.error(f"Error sending product photo: {e}")
@@ -411,7 +430,7 @@ async def select_product(callback: CallbackQuery, state: FSMContext):
         if selected_options.get('made_in_ukraine'):
             options_text += "✅ Made in Ukraine принт\n"
         if selected_options.get('back_text'):
-            options_text += "✅ Задня підпис\n"
+            options_text += "✅ Задній підпис\n"
         if selected_options.get('back_print'):
             options_text += "✅ Задній принт\n"
     elif category == 'hoodies':
@@ -589,7 +608,7 @@ async def receive_payment_screenshot(message: Message, state: FSMContext):
     )
     await db.save_order_admin_message_id(order_id, admin_message.message_id)
 
-    await message.answer("✅ Дякуємо! Вашу оплату буде перевірено найближчим часом.")
+    await message.answer("✅ Дякуємо за оплату! Ваш платіж зараз проходить перевірку. Після підтвердження Ви отримаєте сповіщення про статус обробки замовлення в боті.")
     await state.clear()
 
 
@@ -874,7 +893,7 @@ async def format_order_text(order, order_id, username, user_id):
         if order.get('made_in_ukraine'):
             options_text += "✅ Made in Ukraine принт\n"
         if order.get('back_text'):
-            options_text += "✅ Задня підпис\n"
+            options_text += "✅ Задній підпис\n"
         if order.get('back_print'):
             options_text += "✅ Задній принт\n"
     elif product == 'Худі':
@@ -1449,7 +1468,7 @@ async def format_order_text(order, order_id, username, user_id):
         if order.get('made_in_ukraine'):
             options_text += "✅ Made in Ukraine принт\n"
         if order.get('back_text'):
-            options_text += "✅ Задня підпис\n"
+            options_text += "✅ Задній підпис\n"
         if order.get('back_print'):
             options_text += "✅ Задній принт\n"
     elif product == 'Худі':
