@@ -192,6 +192,9 @@ async def proceed_to_product(callback: CallbackQuery, state: FSMContext):
 
 
 # Функция для отображения продукта
+from aiogram.types import InputMediaPhoto
+
+
 async def display_product(user_id, state: FSMContext):
     data = await state.get_data()
     category = data.get('category')
@@ -224,7 +227,6 @@ async def display_product(user_id, state: FSMContext):
     selected_color_url = colors[current_color_index]
 
     await state.update_data(selected_product=product, selected_color_index=current_color_index)
-    await state.update_data(product_message_id=None)
 
     price, discount_text = await calculate_price(product, user_id)
     await state.update_data(price=price)
@@ -261,19 +263,33 @@ async def display_product(user_id, state: FSMContext):
         f"{options_text}"
     )
 
-    try:
-        message = await bot.send_photo(
-            user_id,
-            photo=selected_color_url,
-            caption=order_summary,
-            reply_markup=kb.product_navigation_keyboard(current_index, total_products, current_color_index,
-                                                        total_colors),
-            parse_mode='Markdown'
-        )
-        await state.update_data(product_message_id=message.message_id)
-        logger.info(f"Displayed product to user {user_id}")
-    except Exception as e:
-        logger.error(f"Error sending product photo: {e}")
+    product_message_id = data.get('product_message_id')
+    keyboard = kb.product_navigation_keyboard(current_index, total_products, current_color_index, total_colors)
+
+    if product_message_id:
+        try:
+            # Редактируем уже отправленное сообщение
+            await bot.edit_message_media(
+                chat_id=user_id,
+                message_id=product_message_id,
+                media=InputMediaPhoto(media=selected_color_url, caption=order_summary, parse_mode='Markdown'),
+                reply_markup=keyboard
+            )
+        except Exception as e:
+            logger.error(f"Error editing product photo: {e}")
+    else:
+        try:
+            message_obj = await bot.send_photo(
+                user_id,
+                photo=selected_color_url,
+                caption=order_summary,
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+            await state.update_data(product_message_id=message_obj.message_id)
+            logger.info(f"Displayed product to user {user_id}")
+        except Exception as e:
+            logger.error(f"Error sending product photo: {e}")
 
 
 # Обработка кнопок пагинации по моделям
