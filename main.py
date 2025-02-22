@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import json
 import os
 import logging
@@ -21,7 +22,12 @@ from dotenv import load_dotenv
 
 from app import buttons as kb
 from app import database as db
-import time
+import asyncio
+import logging
+from aiogram import Bot
+from app.database import get_orders_not_delivered, update_order_status
+from app.database import get_order_by_id
+
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -1250,6 +1256,41 @@ async def admin_order_action(callback: CallbackQuery, state: FSMContext):
     elif action == 'cancel':
         await db.update_order_status(order_id, 'Відхилено')
         await bot.send_message(user_id, f"Ваше замовлення #{order_id} було відхилено.")
+    elif action == 'details':
+        # ====== ЗДЕСЬ ПОКАЗЫВАЕМ ДЕТАЛИ ======
+
+        # Локальный статус заказа
+        local_status = order.get('status', 'Невідомий')
+        # TTN (если есть)
+        ttn = order.get('ttn')
+
+        # Тут вызываем вашу функцию format_order_text,
+        # или пишем вручную описание
+        order_text = await format_order_text(
+            order,
+            order_id,
+            callback.from_user.username,
+            callback.from_user.id
+        )
+
+        if not ttn:
+            # Если TTN нет, выводим локальный статус
+            message_text = (
+                f"{order_text}\n\n"
+                f"Статус (з БД): {local_status}\n"
+                f"TTN: Немає\n"
+            )
+        else:
+            # Если TTN есть, обращаемся к API Новой Почты
+            np_status = await get_nova_poshta_status(ttn)  # ваша функция опроса
+            message_text = (
+                f"{order_text}\n\n"
+                f"📦 **Статус НП**: {np_status}\n"
+                f"TTN: {ttn}"
+            )
+
+        # Отправляем новое сообщение
+        await callback.message.answer(message_text, parse_mode='Markdown')
     else:
         await callback.answer('Невідома дія.')
         return
@@ -1531,12 +1572,144 @@ async def get_order_image_url(order):
             return colors[index]
     return "https://i.ibb.co/cx351Lx/1-2.png"
 
+NOVA_POSHTA_API_KEY = os.getenv("NOVA_POSHTA_API_KEY")
 
+async def get_nova_poshta_status(ttn: str) -> str:
+    """
+    Делает запрос к API Новой Почты, возвращает строку со статусом посылки.
+    Если не удалось получить статус — возвращает текст об ошибке.
+    """
+    url = "https://api.novaposhta.ua/v2.0/json/"
+    payload = {
+        "apiKey": NOVA_POSHTA_API_KEY,
+        "modelName": "TrackingDocument",
+        "calledMethod": "getStatusDocuments",
+        "methodProperties": {
+            "Documents": [
+                {
+                    "DocumentNumber": ttn,
+                    "Phone": ""  # Можно указать телефон, если хотите
+                }
+            ]
+        }
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as resp:
+                data = await resp.json()
+                # Ожидаем, что data['data'] — список документов
+                doc_info = data.get('data', [])
+                if not doc_info:
+                    return "Не вдалося отримати дані від Нової Пошти."
+                doc = doc_info[0]
+                # Из doc можно достать много полей:
+                #   Status, StatusCode, WarehouseRecipientAddress, DeliveryDate, RecipientDateTime и т.д.
+                return doc.get('Status', 'Статус невідомий')
+    except Exception as e:
+        return f"Помилка з'єднання з Новою Поштою: {e}"
+
+
+@dp.callback_query(F.data.startswith('order_details_'))
+async def order_details_callback(callback: CallbackQuery, state: FSMContext):
+    # Парсим order_id из строки "order_details_123"
+    parts = callback.data.split('_')
+    # parts[0] = "order", parts[1] = "details", parts[2] = "{order_id}"
+    order_id = int(parts[2])
+
+    # Получаем заказ из БД по ID
+    order = await db.get_order_by_id(order_id)
+    if not order:
+        await callback.answer("Замовлення не знайдено.", show_alert=True)
+        return
+
+    # Если TTN нет -> выводим локальный статус, если есть -> запрашиваем НП
+    ttn = order.get('ttn')
+    local_status = order.get('status', 'Невідомий')
+
+    # Можно использовать вашу функцию format_order_text для подробностей
+    order_text = await format_order_text(order, order_id, callback.from_user.username, callback.from_user.id)
+
+    if not ttn:
+        # Показываем статус из БД и пишем, что TTN нет
+        message_text = (
+            f"{order_text}\n\n"
+            f"Статус (з БД): {local_status}\n"
+            f"TTN: Немає\n"
+        )
+        await callback.message.answer(message_text, parse_mode='Markdown')
+    else:
+        # Если TTN есть, обращаемся к API Новой Почты
+        np_status = await get_nova_poshta_status(ttn)  # ваша функция запроса
+        message_text = (
+            f"{order_text}\n\n"
+            f"📦 **Статус з Нової Пошти:** {np_status}\n"
+            f"TTN: {ttn}"
+        )
+        await callback.message.answer(message_text, parse_mode='Markdown')
+
+    # Обязательный ответ колбэку, чтобы Telegram не думал, что бот завис
+    await callback.answer()
+
+async def auto_check_nova_poshta():
+    """
+    Раз в час проверяем все заказы со статусом != 'Доставлено' и != 'Відхилено',
+    у которых есть TTN. Если 'Відправлення отримано' — ставим 'Доставлено',
+    пишем пользователю и админу.
+    """
+    while True:
+        try:
+            orders = await get_orders_not_delivered()  # все, у кого status != 'Доставлено' / 'Відхилено'
+            for order in orders:
+                order_id = order['id']
+                ttn = order.get('ttn')
+                if not ttn:
+                    continue  # нет TTN — пропускаем
+
+                np_status = await get_nova_poshta_status(ttn)
+                if "Відправлення отримано" in np_status:
+                    # 1) Ставим статус 'Доставлено'
+                    await update_order_status(order_id, 'Доставлено')
+
+                    # 2) Уведомляем пользователя
+                    user_id = order['user_id']
+                    user_message = (
+                        f"Дякуємо, що обрали наш магазин!\n"
+                        f"Ваше замовлення #{order_id} з номером ТТН {ttn} щойно було отримано "
+                        f"у відділенні Нової Пошти. Бажаємо приємного користування!"
+                    )
+                    try:
+                        await bot.send_message(user_id, user_message)
+                    except Exception as e:
+                        logging.error(f"Не вдалося відправити повідомлення користувачу {user_id}: {e}")
+
+                    # 3) Уведомляем администратора
+                    admin_message = (
+                        f"Замовлення #{order_id} з TTN: {ttn} "
+                        f"отримано користувачем і переведено в статус 'Доставлено'."
+                    )
+                    try:
+                        await bot.send_message(ADMIN_ID, admin_message)
+                    except Exception as e:
+                        logging.error(f"Не вдалося відправити повідомлення адміністратору: {e}")
+
+                    logging.info(f"Заказ #{order_id} (TTN {ttn}) переведён в 'Доставлено'")
+        except Exception as e:
+            logging.error(f"Ошибка в auto_check_nova_poshta: {e}")
+
+        # Ждём 1 час и повторяем
+        await asyncio.sleep(3600)
 # ======================================================================
-# Запуск бота
 async def main():
     await db.init_db()  # Создаём таблицы, если их нет
+
+    # Сначала запускаем фоновую задачу
+    asyncio.create_task(auto_check_nova_poshta())
+    logger.info("Фоновая задача auto_check_nova_poshta запущена.")
+
+    # Теперь - polling (он заблокирует выполнение дальше, пока бот не остановится)
     await dp.start_polling(bot, skip_updates=True)
+
 
 if __name__ == '__main__':
     asyncio.run(main())

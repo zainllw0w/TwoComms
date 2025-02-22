@@ -188,8 +188,12 @@ def admin_orders_menu():
 
 def order_details_button(order_id):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text='📄 Деталі замовлення',
-                              callback_data=f'order_details_{order_id}')]
+        [
+            InlineKeyboardButton(
+                text='📄 Деталі замовлення',
+                callback_data=f'order_details_{order_id}'
+            )
+        ]
     ])
     return keyboard
 
