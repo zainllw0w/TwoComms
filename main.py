@@ -32,8 +32,8 @@ from app.database import get_order_by_id
 
 # Загрузка переменных окружения
 load_dotenv()
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
-BOT_TOKEN = os.getenv('BOT_TOKEN')
+ADMIN_ID = os.environ.get("ADMIN_ID")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 PRODUCTS_JSON_PATH = 'app/products.json'
@@ -1652,7 +1652,7 @@ async def get_order_image_url(order):
             return colors[index]
     return "https://i.ibb.co/cx351Lx/1-2.png"
 
-NOVA_POSHTA_API_KEY = os.getenv("NOVA_POSHTA_API_KEY")
+NOVA_POSHTA_API_KEY = os.environ.get("NOVA_POSHTA_API_KEY")
 
 async def get_nova_poshta_status(ttn: str) -> str:
     """

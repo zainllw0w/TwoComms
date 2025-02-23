@@ -21,8 +21,8 @@ logging.basicConfig(
     ]
 )
 
-INSTAGRAM_BUSINESS_ACCOUNT_ID = os.getenv('INSTAGRAM_BUSINESS_ACCOUNT_ID')
-ACCESS_TOKEN = os.getenv('INSTAGRAM_ACCESS_TOKEN')
+INSTAGRAM_BUSINESS_ACCOUNT_ID = os.environ.get("INSTAGRAM_BUSINESS_ACCOUNT_ID")
+ACCESS_TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN")
 
 # Проверка наличия необходимых переменных окружения
 if not INSTAGRAM_BUSINESS_ACCOUNT_ID or not ACCESS_TOKEN:
