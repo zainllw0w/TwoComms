@@ -32,7 +32,7 @@ from app.database import get_order_by_id
 
 # Загрузка переменных окружения
 load_dotenv()
-ADMIN_ID = os.environ.get("ADMIN_ID")
+ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
