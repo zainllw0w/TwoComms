@@ -1,4 +1,5 @@
 import asyncio
+from app.keep_alive import keep_alive
 import aiohttp
 import json
 import os
@@ -2066,6 +2067,7 @@ async def create_nova_poshta_document(user_data, sender_data, payer_type, cost, 
 
 # ======================================================================
 async def main():
+    keep_alive()
     await db.init_db()  # Создаём таблицы, если их нет
 
     # Сначала запускаем фоновую задачу
