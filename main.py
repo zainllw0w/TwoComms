@@ -38,6 +38,13 @@ dp = Dispatcher(storage=MemoryStorage())
 PRODUCTS_JSON_PATH = 'app/products.json'
 
 # Определение состояний FSM
+class AdminTtnFlow(StatesGroup):
+    waiting_for_city = State()         # Ждём, выберут город отправки (Киев/Харьков)
+    waiting_for_payer = State()        # Ждём, кто платит (наложка или отправитель)
+    waiting_for_sender_branch = State() # Ждём ввод номера отделения, откуда отправляем
+    waiting_for_confirm = State()       # Показываем сводку, ждём подтверждения или «ввести заново»
+    waiting_for_manual_data = State()   # (опционально) если при создании ТТН возникла ошибка, просим ввести вручную
+
 class OrderStates(StatesGroup):
     waiting_for_size = State()
     waiting_for_options = State()
@@ -563,7 +570,7 @@ async def order_phone(message: Message, state: FSMContext):
             f"💳 **Оплата на карту**\n\n"
             f"💰 **Сума до оплати:** {price} грн\n"
             f"💳 **Реквізити для оплати:**\n"
-            f"4441111140615463\n\n"
+            "```\n4441111140615463\n```"
             f"{discount_text}\n\n"
             f"Після оплати натисніть кнопку 'Оплачено' і надішліть скріншот квитанції.",
             parse_mode='Markdown',
@@ -1225,13 +1232,85 @@ async def completed_orders(message: Message):
             )
 
 
-# Обработка нажатий администратором на кнопки действий по заказу
 @dp.callback_query(F.data.startswith('order_'))
 async def admin_order_action(callback: CallbackQuery, state: FSMContext):
+    """
+    Общий обработчик админских кнопок вида:
+     - order_ready_{id}
+     - order_sent_{id}
+     - order_details_{id}
+     - order_create_ttn_{id}
+    """
     data = callback.data
     parts = data.split('_')
-    action = parts[1]
-    order_id = int(parts[2])
+    # Примеры:
+    #  - "order_ready_7" => parts = ["order", "ready", "7"]
+    #  - "order_sent_7" => parts = ["order", "sent", "7"]
+    #  - "order_details_7" => parts = ["order", "details", "7"]
+    #  - "order_create_ttn_7" => parts = ["order", "create", "ttn", "7"]
+
+    if len(parts) < 3:
+        await callback.answer('Невідома дія.')
+        return
+
+    main_action = parts[1]  # "ready" / "sent" / "details" / "create" и т.п.
+
+    # --------------------------
+    # 1) ОБРАБОТКА "order_create_ttn_{id}"
+    # --------------------------
+    if main_action == "create":
+        # Значит у нас нечто вроде "order_create_ttn_10"
+        if len(parts) < 4:
+            await callback.answer("Невідома дія.")
+            return
+
+        sub_action = parts[2]  # должно быть "ttn"
+        if sub_action != "ttn":
+            await callback.answer("Невідома піддія створення.")
+            return
+
+        try:
+            order_id = int(parts[3])
+        except ValueError:
+            await callback.answer("Невірний формат order_id.")
+            return
+
+        # Ищем заказ в БД
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await callback.answer('Замовлення не знайдено.')
+            return
+
+        # Переход к FSM AdminTtnFlow:
+        #  1) сохраним order_id в state
+        #  2) спросим у админа город отправителя (Киев/Харьков)
+        await state.update_data(order_id=order_id)
+        await state.set_state(AdminTtnFlow.waiting_for_city)
+
+        # Выведем кнопки выбора города
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text='Київ', callback_data='sender_city_kyiv'),
+                InlineKeyboardButton(text='Харків', callback_data='sender_city_kharkiv')
+            ]
+        ])
+        await callback.message.answer(
+            "Оберіть місто відправлення:",
+            reply_markup=keyboard
+        )
+        await callback.answer()
+        return
+
+    # --------------------------
+    # 2) ОБРАБОТКА "order_ready_{id}", "order_sent_{id}", "order_delivered_{id}",
+    #    "order_cancel_{id}", "order_details_{id}"
+    # --------------------------
+    # если main_action != "create", значит обычные действия.
+    try:
+        order_id = int(parts[2])  # берем order_id из parts[2]
+    except ValueError:
+        await callback.answer("Невірний ID замовлення.")
+        return
 
     order = await db.get_order_by_id(order_id)
     if not order:
@@ -1241,60 +1320,57 @@ async def admin_order_action(callback: CallbackQuery, state: FSMContext):
     user_id = order['user_id']
     admin_message_id = order.get('admin_message_id')
 
-    if action == 'ready':
+    if main_action == 'ready':
         await db.update_order_status(order_id, 'Готово до відправки')
         await bot.send_message(user_id, f"Ваше замовлення #{order_id} готове до відправки.")
-    elif action == 'sent':
+
+    elif main_action == 'sent':
+        # Старая логика: запрос номера ТТН вручную
         await callback.message.answer("📦 Введіть номер ТТН для замовлення:")
         await state.update_data(order_id=order_id, user_id=user_id)
         await state.set_state(AdminInputStates.waiting_for_ttn)
         await callback.answer()
         return
-    elif action == 'delivered':
+
+    elif main_action == 'delivered':
         await db.update_order_status(order_id, 'Доставлено')
         await bot.send_message(user_id, f"Ваше замовлення #{order_id} доставлено. Дякуємо за покупку!")
-    elif action == 'cancel':
+
+    elif main_action == 'cancel':
         await db.update_order_status(order_id, 'Відхилено')
         await bot.send_message(user_id, f"Ваше замовлення #{order_id} було відхилено.")
-    elif action == 'details':
-        # ====== ЗДЕСЬ ПОКАЗЫВАЕМ ДЕТАЛИ ======
 
-        # Локальный статус заказа
+    elif main_action == 'details':
         local_status = order.get('status', 'Невідомий')
-        # TTN (если есть)
         ttn = order.get('ttn')
-
-        # Тут вызываем вашу функцию format_order_text,
-        # или пишем вручную описание
         order_text = await format_order_text(
             order,
             order_id,
             callback.from_user.username,
             callback.from_user.id
         )
-
         if not ttn:
-            # Если TTN нет, выводим локальный статус
             message_text = (
                 f"{order_text}\n\n"
                 f"Статус (з БД): {local_status}\n"
                 f"TTN: Немає\n"
             )
         else:
-            # Если TTN есть, обращаемся к API Новой Почты
-            np_status = await get_nova_poshta_status(ttn)  # ваша функция опроса
+            np_status = await get_nova_poshta_status(ttn)  # ваша функция трекинга
             message_text = (
                 f"{order_text}\n\n"
                 f"📦 **Статус НП**: {np_status}\n"
                 f"TTN: {ttn}"
             )
-
-        # Отправляем новое сообщение
         await callback.message.answer(message_text, parse_mode='Markdown')
     else:
         await callback.answer('Невідома дія.')
         return
 
+    # --------------------------
+    # 3) Завершаем обработку: обновляем inline-клавиатуру для админа (если нужно)
+    # --------------------------
+    # Перечитываем заказ, чтобы обновить статус (если он поменялся)
     order = await db.get_order_by_id(order_id)
     statuses = get_statuses_from_order_status(order['status'])
     try:
@@ -1305,7 +1381,10 @@ async def admin_order_action(callback: CallbackQuery, state: FSMContext):
         )
     except Exception as e:
         logger.error(f"Error updating admin message: {e}")
+
     await callback.answer('Статус замовлення оновлено.')
+
+
 
 
 # Обработка ввода ТТН от администратора
@@ -1699,6 +1778,292 @@ async def auto_check_nova_poshta():
 
         # Ждём 1 час и повторяем
         await asyncio.sleep(3600)
+
+@dp.callback_query(F.data.startswith('order_create_ttn_'))
+async def admin_create_ttn_start(callback: CallbackQuery, state: FSMContext):
+    # Пример callback_data: "order_create_ttn_123"
+    parts = callback.data.split('_')  # ["order", "create", "ttn", "123"]
+    order_id = int(parts[3])
+
+    # Сохраняем order_id во временное хранилище FSM
+    await state.update_data(order_id=order_id)
+
+    # Переходим в состояние waiting_for_city
+    await state.set_state(AdminTtnFlow.waiting_for_city)
+
+    # Предлагаем выбрать город
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Київ', callback_data='sender_city_kyiv'),
+            InlineKeyboardButton(text='Харків', callback_data='sender_city_kharkiv')
+        ]
+    ])
+    await callback.message.answer("Оберіть місто відправлення:", reply_markup=keyboard)
+    await callback.answer()
+
+
+@dp.callback_query(AdminTtnFlow.waiting_for_city, F.data.startswith('sender_city_'))
+async def admin_choose_city(callback: CallbackQuery, state: FSMContext):
+    # sender_city_kyiv или sender_city_kharkiv
+    city_code = callback.data.split('_')[2]  # "kyiv" или "kharkiv"
+    # Сохраним это в FSM
+    await state.update_data(sender_city=city_code)
+
+    # Теперь переходим к выбору, кто платит
+    await state.set_state(AdminTtnFlow.waiting_for_payer)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Наложений платіж', callback_data='payer_cod'),
+            InlineKeyboardButton(text='Я оплачую', callback_data='payer_sender')
+        ]
+    ])
+    await callback.message.answer("Хто оплачує доставку?", reply_markup=keyboard)
+    await callback.answer()
+
+@dp.callback_query(AdminTtnFlow.waiting_for_payer, F.data.in_(['payer_cod', 'payer_sender']))
+async def admin_choose_payer(callback: CallbackQuery, state: FSMContext):
+    payer_type = callback.data  # "payer_cod" или "payer_sender"
+    await state.update_data(payer_type=payer_type)
+
+    # Следующий шаг - ввод номера отделения отправителя
+    await callback.message.answer("Введіть номер відділення, з якого ви відправляєте (наприклад, 52).")
+    await state.set_state(AdminTtnFlow.waiting_for_sender_branch)
+    await callback.answer()
+@dp.message(AdminTtnFlow.waiting_for_sender_branch)
+async def admin_input_sender_branch(message: Message, state: FSMContext):
+    branch = message.text.strip()
+    # Сохраняем в FSM
+    await state.update_data(sender_branch=branch)
+
+    # + телефон/ФИО отправителя можно захардкодить в .env
+    # или тоже просить вводить. Допустим, захардкодим:
+    sender_phone = "+380939693920"
+    sender_name = "Синіло Артем Віталійович"
+    await state.update_data(sender_phone=sender_phone, sender_name=sender_name)
+
+    # Теперь собираем сводку
+    data = await state.get_data()
+    order_id = data['order_id']
+    order = await db.get_order_by_id(order_id)
+    if not order:
+        await message.answer("Замовлення не знайдено, перезапустіть процес.")
+        await state.clear()
+        return
+
+    # Данные пользователя
+    user_name = order['name']
+    user_phone = order['phone']
+    user_city = order['city']
+    user_branch = order['branch']
+    price = order.get('price', 0)  # сумма заказа
+
+    # Смотрим, что выбрали
+    city_code = data['sender_city']  # "kyiv" / "kharkiv"
+    city_sender_name = "Київ" if city_code == "kyiv" else "Харків"
+    payer_type = data['payer_type'] # "payer_cod" / "payer_sender"
+    if payer_type == 'payer_cod':
+        payer_str = f"Наложений платіж, сума: {price} грн"
+    else:
+        payer_str = "Оплачує відправник (ви)"
+
+    # Собираем красивое сообщение
+    summary = (
+        "Перевірте дані для створення ТТН:\n\n"
+        f"Відправник: {sender_name}\n"
+        f"Телефон відправника: {sender_phone}\n"
+        f"Місто відправника: {city_sender_name}\n"
+        f"Відділення відправника: {branch}\n\n"
+
+        f"Отримувач: {user_name}\n"
+        f"Телефон отримувача: {user_phone}\n"
+        f"Місто отримувача: {user_city}\n"
+        f"Відділення отримувача: {user_branch}\n\n"
+
+        f"Спосіб оплати: {payer_str}\n"
+        f"Сума замовлення: {price} грн\n\n"
+        "Підтвердити створення ТТН?"
+    )
+    # Выводим кнопку "Підтвердити" или "Ввести заново"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_create_ttn'),
+            InlineKeyboardButton(text='❌ Ввести заново', callback_data='re_enter_ttn')
+        ]
+    ])
+    await message.answer(summary, reply_markup=keyboard)
+
+    # Переходим в состояние waiting_for_confirm
+    await state.set_state(AdminTtnFlow.waiting_for_confirm)
+
+
+@dp.callback_query(AdminTtnFlow.waiting_for_confirm, F.data.in_(['confirm_create_ttn', 're_enter_ttn']))
+async def admin_confirm_ttn(callback: CallbackQuery, state: FSMContext):
+    if callback.data == 're_enter_ttn':
+        # Вернёмся к шагу ввода отделения отправителя
+        await callback.message.answer("Будь ласка, введіть номер відділення відправника заново:")
+        await state.set_state(AdminTtnFlow.waiting_for_sender_branch)
+        await callback.answer()
+        return
+
+    # Иначе confirm_create_ttn
+    data = await state.get_data()
+    order_id = data['order_id']
+    order = await db.get_order_by_id(order_id)
+    if not order:
+        await callback.answer("Замовлення не знайдено.", show_alert=True)
+        await state.clear()
+        return
+
+    # Извлекаем всё, что нужно для формирования JSON
+    sender_city_code = data['sender_city']  # "kyiv"/"kharkiv"
+    # Можно сделать словарь:
+    city_sender_text = "м.Київ" if sender_city_code == "kyiv" else "м.Харків"
+    sender_branch = data['sender_branch']
+    sender_phone = data['sender_phone']
+    sender_name = data['sender_name']
+
+    user_name = order['name']
+    user_phone = order['phone']
+    user_city = order['city']
+    user_branch = order['branch']
+    price = order.get('price', 0)
+
+    payer_type = data['payer_type']  # "payer_cod" / "payer_sender"
+    # логика наложенного платежа / кто платит
+    # PayerType = 'Recipient' / 'Sender'
+    # PaymentMethod = 'Cash'
+    if payer_type == 'payer_cod':
+        # Наложенный платёж, получатель платит
+        doc_payer_type = "Recipient"
+        cost = str(price)  # объявленная стоимость
+        backward_delivery = True
+    else:
+        # Отправитель платит, оплата безнал или нал - на ваш выбор
+        doc_payer_type = "Sender"
+        cost = str(price)
+        backward_delivery = False
+
+    # Теперь вызываем функцию, создающую документ в Новой Почте
+    # Примерно так:
+    ttn, error_msg = await create_nova_poshta_document(
+        user_data={
+            'fullname': user_name,
+            'phone': user_phone,
+            'city': user_city,
+            'branch': user_branch
+        },
+        sender_data={
+            'sender_name': sender_name,
+            'sender_phone': sender_phone,
+            'sender_city': city_sender_text,
+            'sender_branch': sender_branch
+        },
+        payer_type=doc_payer_type,
+        cost=cost,
+        backward_delivery=backward_delivery
+    )
+    if error_msg:
+        # Если ошибка, предлагаем администратору ввести вручную
+        await callback.message.answer(
+            f"Помилка створення ТТН: {error_msg}\n"
+            "Введіть виправлені дані отримувача вручну або спробуйте ще раз."
+        )
+        await state.set_state(AdminTtnFlow.waiting_for_manual_data)
+        await callback.answer()
+        return
+
+    # Успешно создали ТТН => сохраняем в БД
+    await db.update_order_ttn(order_id, ttn)
+    # Можем обновить статус, например "Готово до відправки" или "Відправлено"
+    await db.update_order_status(order_id, 'Готово до відправки')
+
+    # Уведомляем пользователя
+    user_id = order['user_id']
+    await bot.send_message(
+        user_id,
+        f"Для вашого замовлення #{order_id} створено ТТН: {ttn}.\n"
+        "Очікуйте відправлення!"
+    )
+    # Уведомляем администратора
+    await callback.message.answer(
+        f"✅ ТТН {ttn} успішно створено та додано до замовлення #{order_id}!",
+    )
+    await callback.answer()
+    # Очистка состояния
+    await state.clear()
+
+
+async def create_nova_poshta_document(user_data, sender_data, payer_type, cost, backward_delivery=False):
+    """
+    user_data = {fullname, phone, city, branch}
+    sender_data = {sender_name, sender_phone, sender_city, sender_branch}
+    payer_type = 'Sender' или 'Recipient'
+    cost = '500'
+    backward_delivery = True/False (наложка)
+
+    Возвращает (ttn, None) или (None, error_message)
+    """
+    import aiohttp
+
+    url = "https://api.novaposhta.ua/v2.0/json/"
+    payload = {
+        "apiKey": NOVA_POSHTA_API_KEY,  # из .env
+        "modelName": "InternetDocument",
+        "calledMethod": "save",
+        "methodProperties": {
+            "NewAddress": "1",
+            "PayerType": payer_type,       # "Recipient" / "Sender"
+            "PaymentMethod": "Cash",
+            "CargoType": "Cargo",
+            "VolumeGeneral": "0.1",
+            "Weight": "1",
+            "ServiceType": "WarehouseWarehouse",
+            "SeatsAmount": "1",
+            "Description": "Замовлення з бота",
+            "Cost": cost,  # объявленная стоимость
+            "CitySender": sender_data['sender_city'],  # упрощённо: "м.Київ", но по-хорошему нужен Ref
+            "SenderAddress": f"відділення {sender_data['sender_branch']}",
+            "SendersPhone": sender_data['sender_phone'],
+            "Sender": sender_data['sender_name'],
+
+            "RecipientName": user_data['fullname'],
+            "RecipientPhone": user_data['phone'],
+            "RecipientCityName": f"м.{user_data['city']}",
+            "RecipientAddressName": f"відділення №{user_data['branch']}",
+            "RecipientType": "PrivatePerson"
+        }
+    }
+
+    # Если наложка, указываем BackwardDeliveryData
+    if backward_delivery:
+        payload["methodProperties"]["BackwardDeliveryData"] = [
+            {
+                "PayerType": "Recipient",
+                "CargoType": "Money",
+                "RedeliveryString": cost
+            }
+        ]
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload) as resp:
+            data = await resp.json()
+            if not data.get('success'):
+                errors = data.get('errors') or []
+                warnings = data.get('warnings') or []
+                err_msg = ', '.join(errors + warnings)
+                return None, f"Помилка: {err_msg}"
+
+            doc_info = data.get('data', [])
+            if not doc_info:
+                return None, "Відповідь пуста, документ не створено."
+
+            doc = doc_info[0]
+            ttn = doc.get('IntDocNumber')
+            if not ttn:
+                return None, "Не вдалося отримати IntDocNumber."
+            return ttn, None
+
+
 # ======================================================================
 async def main():
     await db.init_db()  # Создаём таблицы, если их нет

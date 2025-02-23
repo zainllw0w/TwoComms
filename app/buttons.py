@@ -137,13 +137,21 @@ def payment_approval_buttons(user_id, order_id):
 
 def admin_order_actions(order_id, statuses):
     buttons = []
+
     ready_text = '🛠️ Готово до відправки ✅' if statuses.get('ready', False) else '🛠️ Готово до відправки'
     buttons.append([InlineKeyboardButton(text=ready_text, callback_data=f'order_ready_{order_id}')])
+
+    # КНОПКА "Створити ТТН"
+    buttons.append([InlineKeyboardButton(text='Створити ТТН', callback_data=f'order_create_ttn_{order_id}')])
+
     sent_text = '📦 Відправлено ✅' if statuses.get('sent', False) else '📦 Відправлено'
     buttons.append([InlineKeyboardButton(text=sent_text, callback_data=f'order_sent_{order_id}')])
+
     delivered_text = '✅ Доставлено ✅' if statuses.get('delivered', False) else '✅ Доставлено'
     buttons.append([InlineKeyboardButton(text=delivered_text, callback_data=f'order_delivered_{order_id}')])
+
     buttons.append([InlineKeyboardButton(text='❌ Відхилити замовлення', callback_data=f'order_cancel_{order_id}')])
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
 
