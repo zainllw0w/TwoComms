@@ -309,9 +309,7 @@ def options_selection_keyboard(category, selected_options):
         ]
     elif category == 'hoodies':
         options = [
-            ('collar', 'Горловина'),
-            ('sleeve_text', 'Надписи на рукавах'),
-            ('back_print', 'Задній принт')
+            ('sleeve_text', 'Принт на рукавах')
         ]
 
     buttons = []

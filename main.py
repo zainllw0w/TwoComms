@@ -446,12 +446,8 @@ async def select_product(callback: CallbackQuery, state: FSMContext):
         if selected_options.get('back_print'):
             options_text += "✅ Задній принт\n"
     elif category == 'hoodies':
-        if selected_options.get('collar'):
-            options_text += "✅ Горловина\n"
-        if selected_options.get('sleeve_text'):
-            options_text += "✅ Надписи на рукавах\n"
-        if selected_options.get('back_print'):
-            options_text += "✅ Задній принт\n"
+            options_text += "✅ Принт на рукавах\n"
+
 
     if options_text:
         options_text = "\n**Вибрані опції:**\n" + options_text
@@ -1590,7 +1586,7 @@ async def format_order_text(order, order_id, username, user_id):
         if order.get('collar'):
             options_text += "✅ Горловина\n"
         if order.get('sleeve_text'):
-            options_text += "✅ Надписи на рукавах\n"
+            options_text += "✅ Принт на рукавах\n"
         if order.get('back_print'):
             options_text += "✅ Задній принт\n"
     options_text = "\n**Вибрані опції:**\n" + options_text if options_text else "\n**Вибрані опції:**\n❌ Немає"
