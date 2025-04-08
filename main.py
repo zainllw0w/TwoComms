@@ -857,7 +857,7 @@ async def process_payment_rejection_reason(message: Message, state: FSMContext):
 
 # Функция расчёта цены
 async def calculate_price(product, user_id):
-    base_price = 1150 if product.get('model_id', '').startswith('ts') else 1350
+    base_price = 1150 if product.get('model_id', '').startswith('ts') else 1400
     total_discount = 0.0
     discounts = await db.get_user_discounts(user_id)
     discount_details = []
@@ -1546,7 +1546,7 @@ async def admin_approve_discount(callback: CallbackQuery, state: FSMContext):
 # Вспомогательные функции (расчет цены, форматирование заказа, получение статусов и URL изображения)
 
 async def calculate_price(product, user_id):
-    base_price = 1150 if product.get('model_id', '').startswith('ts') else 1350
+    base_price = 1150 if product.get('model_id', '').startswith('ts') else 1400
     total_discount = 0.0
     discounts = await db.get_user_discounts(user_id)
     discount_details = []
