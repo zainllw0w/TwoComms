@@ -1583,12 +1583,8 @@ async def format_order_text(order, order_id, username, user_id):
         if order.get('back_print'):
             options_text += "✅ Задній принт\n"
     elif product == 'Худі':
-        if order.get('collar'):
-            options_text += "✅ Горловина\n"
         if order.get('sleeve_text'):
             options_text += "✅ Принт на рукавах\n"
-        if order.get('back_print'):
-            options_text += "✅ Задній принт\n"
     options_text = "\n**Вибрані опції:**\n" + options_text if options_text else "\n**Вибрані опції:**\n❌ Немає"
     rejection_reason_text = f"\n❌ **Причина відхилення:** {order.get('rejection_reason')}" if order.get(
         'rejection_reason') else ""
