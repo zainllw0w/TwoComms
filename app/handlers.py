@@ -252,8 +252,7 @@ async def update_parameters(data):
         text = (
             f"Ваш вибір:\n"
             f"Розмір худі: {data.get('size', 'не обрано')}\n"
-            f"Горловина: {'є' if data.get('collar') else 'немає'}\n"
-            f"Задній принт: {'включено' if data.get('back_print') else 'вимкнено'}"
+            f"Принт на рукавах: {'є' if data.get('sleeve_text') else 'немає'}\n"
         )
     else:
         text = "Ви ще не обрали товар."

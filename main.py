@@ -147,9 +147,7 @@ async def select_category(message: Message, state: FSMContext):
         }
     else:  # hoodies
         default_options = {
-            'collar': True,
             'sleeve_text': True,
-            'back_print': True
         }
 
     # Сохраняем в state
@@ -911,12 +909,8 @@ async def format_order_text(order, order_id, username, user_id):
         if order.get('back_print'):
             options_text += "✅ Задній принт\n"
     elif product == 'Худі':
-        if order.get('collar'):
-            options_text += "✅ Горловина\n"
         if order.get('sleeve_text'):
-            options_text += "✅ Надписи на рукавах\n"
-        if order.get('back_print'):
-            options_text += "✅ Задній принт\n"
+            options_text += "✅ Принт на рукавах\n"
 
     if options_text:
         options_text = "\n**Вибрані опції:**\n" + options_text

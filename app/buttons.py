@@ -47,7 +47,7 @@ def category_selection_menu():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text='👕 Футболки'),
-             KeyboardButton(text='🥷🏼 Худі (наразі не має в наявності)')],
+             KeyboardButton(text='🥷🏼 Худі')],
             [KeyboardButton(text='🔙 На головну')]
         ],
         resize_keyboard=True
@@ -256,9 +256,7 @@ def product_display_keyboard(
         ]
     elif category == 'hoodies':
         options = [
-            ('collar', 'Горловина'),
-            ('sleeve_text', 'Надписи на рукавах'),
-            ('back_print', 'Задній принт')
+            ('sleeve_text', 'Принт на рукавах'),
         ]
     else:
         options = []
